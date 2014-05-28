@@ -249,7 +249,7 @@ window.matchMedia || (window.matchMedia = function (win) {
             head.appendChild(style);
 
             // Must be placed after style is inserted into the DOM for IE
-            info = (win.getComputedStyle && win.getComputedStyle(style)) || style.currentStyle;
+            info = (win.getComputedStyle && win.getComputedStyle(style, null)) || style.currentStyle;
 
             // Create media blocks to test for media type
             for ( ; typeIndex < typeLength; typeIndex++) {
@@ -271,8 +271,8 @@ window.matchMedia || (window.matchMedia = function (win) {
             _setFeature();
 
             // Set up listeners
-            addEvent(eventPrefix + 'resize', _watch);
-            addEvent(eventPrefix + 'orientationchange', _watch);
+            addEvent(eventPrefix + 'resize', _watch, false);
+            addEvent(eventPrefix + 'orientationchange', _watch, false);
         };
 
     _init();

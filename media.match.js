@@ -227,7 +227,7 @@ window.matchMedia || (window.matchMedia = function (win) {
                 h = function() {
                     return win.innerHeight || _viewport.clientHeight;
                 },
-                screen     = win.screen,
+                screen      = win.screen,
                 dw          = screen.width,
                 dh          = screen.height,
                 c           = screen.colorDepth,
@@ -248,7 +248,7 @@ window.matchMedia || (window.matchMedia = function (win) {
             _features['device-aspect-ratio']    = (dw / dh).toFixed(2);
             _features['color']                  = c;
             _features['color-index']            = Math.pow(2, c);
-            _features['resolution']             = (x && x * 96) || win.screen.deviceXDPI || 96;
+            _features['resolution']             = (x && x * 96) || screen.deviceXDPI || 96;
             _features['device-pixel-ratio']     = x || 1;
 
             style.type  = 'text/css';

@@ -4,7 +4,8 @@ window.matchMedia || (window.matchMedia = function (win) {
     'use strict';
 
     // Internal globals
-    var _doc        = win.document,
+    var _dpi,
+        _doc        = win.document,
         _viewport   = _doc.documentElement,
         _queries    = [],
         _queryID    = 0,
@@ -16,6 +17,13 @@ window.matchMedia || (window.matchMedia = function (win) {
                     // not screen and
                     // screen
                     // screen and
+        _units   = {
+            cm: 2.54,
+            mm: 25.4,
+            pt: 72,
+            pc: 6,
+            'in': 1
+        },
         _typeExpr   = /\s*(only|not)?\s*(screen|print|[a-z\-]+)\s*(and)?\s*/i,
                     // (-vendor-min-width: 300px)
                     // (min-width: 300px)
@@ -24,13 +32,18 @@ window.matchMedia || (window.matchMedia = function (win) {
                     // (orientation: portrait|landscape)
         _mediaExpr  = /^\s*\(\s*(-[a-z]+-)?(min-|max-)?([a-z\-]+)\s*(:?\s*([0-9]+(\.[0-9]+)?|portrait|landscape)(px|em|dppx|dpcm|rem|%|in|cm|mm|ex|pt|pc|\/([0-9]+(\.[0-9]+)?))?)?\s*\)\s*$/,
         _timer      = 0,
+        _styleMedia = win.styleMedia,
 
         // Helper methods
 
         /*
             _matches
          */
-        _matches = function (media) {
+        _matches = function(media) {
+            // styleMedia.matchMedium IE 9 way
+            if (_styleMedia && _doc.documentMode) {
+                return _styleMedia.matchMedium(media);
+            }
             // screen and (min-width: 400px), screen and (max-width: 500px)
             var mql         = (media.indexOf(',') !== -1 && media.split(',')) || [media],
                 mqIndex     = mql.length - 1,
@@ -109,12 +122,16 @@ window.matchMedia || (window.matchMedia = function (win) {
                         value   = length;
                         unit    = expr[7];
                         feature = _features[expr[3]];
+                        feature = feature.call ? feature() : feature;
 
                         // Convert unit types
                         if (unit) {
                             if (unit === 'px') {
                                 // If unit is px
                                 value = Number(length);
+                            } else if (_units[unit]) {
+                                // If unit is absolute length units
+                                value = (length * _dpi / _units[unit]).toFixed(2);
                             } else if (unit === 'em' || unit === 'rem') {
                                 // Convert relative length unit to pixels
                                 // Assumed base font size is 16px
@@ -165,31 +182,6 @@ window.matchMedia || (window.matchMedia = function (win) {
         },
 
         /*
-            _setFeature
-         */
-        _setFeature = function () {
-            // Sets properties of '_features' that change on resize and/or orientation.
-            var w   = win.innerWidth || _viewport.clientWidth,
-                h   = win.innerHeight || _viewport.clientHeight,
-                dw  = win.screen.width,
-                dh  = win.screen.height,
-                c   = win.screen.colorDepth,
-                x   = win.devicePixelRatio;
-
-            _features.width                     = w;
-            _features.height                    = h;
-            _features['aspect-ratio']           = (w / h).toFixed(2);
-            _features['device-width']           = dw;
-            _features['device-height']          = dh;
-            _features['device-aspect-ratio']    = (dw / dh).toFixed(2);
-            _features.color                     = c;
-            _features['color-index']            = Math.pow(2, c);
-            _features.orientation               = (h >= w ? 'portrait' : 'landscape');
-            _features.resolution                = (x && x * 96) || win.screen.deviceXDPI || 96;
-            _features['device-pixel-ratio']     = x || 1;
-        },
-
-        /*
             _watch
          */
         _watch = function () {
@@ -202,7 +194,6 @@ window.matchMedia || (window.matchMedia = function (win) {
                     match   = false;
 
                 if (qIndex >= 0) {
-                    _setFeature();
 
                     do {
                         query = _queries[qLength - qIndex];
@@ -210,7 +201,7 @@ window.matchMedia || (window.matchMedia = function (win) {
                         if (query) {
                             match = _matches(query.mql.media);
 
-                            if ((match && !query.mql.matches) || (!match && query.mql.matches)) {
+                            if (match !== query.mql.matches) {
                                 query.mql.matches = match;
 
                                 if (query.listeners) {
@@ -225,14 +216,13 @@ window.matchMedia || (window.matchMedia = function (win) {
                     } while(qIndex--);
                 }
 
-                
             }, 10);
         },
 
         /*
             _init
          */
-        _init = function () {
+        _init = function() {
             var head        = _doc.getElementsByTagName('head')[0],
                 style       = _doc.createElement('style'),
                 info        = null,
@@ -241,7 +231,39 @@ window.matchMedia || (window.matchMedia = function (win) {
                 typeLength  = typeList.length,
                 cssText     = '#mediamatchjs { position: relative; z-index: 0; }',
                 eventPrefix = '',
-                addEvent    = win.addEventListener || (eventPrefix = 'on') && win.attachEvent;
+                addEvent    = win.addEventListener || (eventPrefix = 'on') && win.attachEvent,
+                w = function() {
+                    return win.innerWidth || _viewport.clientWidth;
+                },
+                h = function() {
+                    return win.innerHeight || _viewport.clientHeight;
+                },
+                screen      = win.screen,
+                dw          = screen.width,
+                dh          = screen.height,
+                c           = screen.colorDepth,
+                logicalXDPI = screen.logicalXDPI,
+                ratio       = win.devicePixelRatio || (screen.deviceXDPI / logicalXDPI) || 1;
+
+            _dpi         = logicalXDPI || (ratio * 96);
+
+            // Sets properties of '_features' that change on resize and/or orientation.
+            _features['aspect-ratio'] = function() {
+                return (w() / h()).toFixed(2);
+            };
+            _features['orientation'] = function() {
+                return (h() >= w() ? 'portrait' : 'landscape');
+            };
+
+            _features['width']                  = w;
+            _features['height']                 = h;
+            _features['device-width']           = dw;
+            _features['device-height']          = dh;
+            _features['device-aspect-ratio']    = (dw / dh).toFixed(2);
+            _features['color']                  = c;
+            _features['color-index']            = Math.pow(2, c);
+            _features['resolution']             = _dpi;
+            _features['device-pixel-ratio']     = ratio;
 
             style.type  = 'text/css';
             style.id    = 'mediamatchjs';
@@ -252,8 +274,8 @@ window.matchMedia || (window.matchMedia = function (win) {
             info = (win.getComputedStyle && win.getComputedStyle(style)) || style.currentStyle;
 
             // Create media blocks to test for media type
-            for ( ; typeIndex < typeLength; typeIndex++) {
-                cssText += '@media ' + typeList[typeIndex] + ' { #mediamatchjs { position: relative; z-index: ' + typeIndex + ' } }';
+            for (; typeIndex < typeLength; typeIndex++) {
+                cssText += '@media ' + typeList[typeIndex] + ' { #mediamatchjs { z-index: ' + typeIndex + ' } }';
             }
 
             // Add rules to style element
@@ -267,8 +289,6 @@ window.matchMedia || (window.matchMedia = function (win) {
             _type = typeList[(info.zIndex * 1) || 0];
 
             head.removeChild(style);
-
-            _setFeature();
 
             // Set up listeners
             addEvent(eventPrefix + 'resize', _watch);
